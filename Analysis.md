@@ -1,0 +1,472 @@
+---
+title: "GasInfoPreço4"
+author: "Lira"
+date: "03/01/2020"
+output: html_document
+---
+
+ESSA ANÁLISE REFERE-SE AO MUNICÍPIO DE SÃO PAULO/SP, EM QUE ESTÃO VÁRIOS POSTOS INSTALADOS NA CIDADE. 
+OS DADOS ABORDAM OS PREÇOS DE GASOLINA NO PERÍODO DE LEVANTAMENTO DE NOVEMBRO DE 2019
+
+Mais informações podem ser achadas aqui http://www.anp.gov.br/preco/ 
+
+Os pacotes necessários
+
+```{r PACKAGE}
+
+library(tidyverse)
+library(skimr)
+library(leaflet)
+# library(ggmap)
+library(factoextra)
+
+#Uma função que pode ser útil
+'%!in%' <- function(x,y)!('%in%'(x,y))
+
+```
+
+Os dados para a análise
+
+```{r DATASET}
+
+dados <- read.csv("LevantamentoPreçoSampa.csv")
+
+bairros <- read.csv("SampaBairros.csv")
+
+```
+
+Visão preliminar dos dados - enxergar o que precisa ser ajustado
+
+```{r OVERLOOK}
+
+skim(dados)
+
+```
+
+Ajustar os dados - conserte principalmente as informações de bairro
+
+```{r DATA FIX, include=FALSE}
+
+postos <- dados %>% 
+  mutate_at(vars(-MODELIDADE.DE.COMPRA, -FORNECEDOR..B.BRANCA., -NOTA.FISCAL), list(~as.character(.))) %>% 
+  mutate_at(vars(PREÇO.VENDA, PREÇO.COMPRA), list(~as.numeric(.))) %>%
+  mutate_at(vars(DATA.COLETA, DATA.RECUSA), list(~as.Date(as.character(.), 
+                                                          format = "%d/%m/%Y"))) %>% 
+  mutate(BAIRRO = iconv(BAIRRO, 
+                        from="utf-8", to = "ASCII//TRANSLIT"),
+         BAIRRO = str_to_lower(BAIRRO), 
+         BAIRRO = gsub("raza", "rasa", BAIRRO),
+         BAIRRO = gsub("alvin", "alvim", BAIRRO),
+         BAIRRO = gsub("belezinho", "belenzinho", BAIRRO),
+         BAIRRO = gsub("do limao", "bairro limao", BAIRRO),
+         BAIRRO = gsub("bairro limoeiro", "limoeiro", BAIRRO),
+         BAIRRO = gsub("jardim angela \\(zona sul\\)", "jardim angela", BAIRRO),
+         BAIRRO = gsub("jardim da gloria", "jardim gloria", BAIRRO),
+         BAIRRO = gsub("jardim das rosas - pinheiros", "jardim das rosas", BAIRRO),
+         BAIRRO = gsub("jardim iv centenario", "jardim quarto centenario", BAIRRO),
+         BAIRRO = gsub("vila moinho velho/vila vera", "vila moinho velho", BAIRRO),
+         BAIRRO = gsub("alto dos pinheiros", "alto de pinheiros", BAIRRO),
+         BAIRRO = gsub("vila nov a conceicao", "vila nova conceicao", BAIRRO),
+         BAIRRO = gsub("vila merces", "vila das merces", BAIRRO),
+         BAIRRO = gsub("vila vera/sacoma", "vila vera", BAIRRO),
+         BAIRRO = gsub("vila firmino pinto", "vila firmiano pinto", BAIRRO),
+         BAIRRO = gsub("s miguel paulista", "sao miguel paulista", BAIRRO),
+         BAIRRO = gsub("sto amaro", "santo amaro", BAIRRO),
+         BAIRRO = gsub("parque paineiras", "parque das paineiras", BAIRRO),
+         BAIRRO = gsub("nossa sra do o", "nossa senhora do o", BAIRRO),
+         BAIRRO = gsub("j s cristovao", "jardim nove de julho", BAIRRO),
+         BAIRRO = gsub("hygienopolis", "higienopolis", BAIRRO),
+         BAIRRO = gsub("freguesia do o", "nossa senhora do o", BAIRRO),
+         BAIRRO = gsub("casa verde - santana", "casa verde", BAIRRO),
+         BAIRRO = gsub("cicy lapa 1", "bela alianca", BAIRRO),
+         BAIRRO = gsub("freguesia do o", "nossa senhora do o", BAIRRO),
+         BAIRRO = gsub("cid ae carvalho", "cidade a.e.carvalho", BAIRRO),
+         BAIRRO = gsub(c("^jd","^jd\\."), "jardim", BAIRRO),
+         BAIRRO = gsub("jardim\\.", "jardim", BAIRRO),
+         BAIRRO = gsub(c("pq", "pq\\."), "parque", BAIRRO),
+         BAIRRO = gsub("parque\\.", "parque", BAIRRO),
+         BAIRRO = gsub("prq", "parque", BAIRRO),
+         BAIRRO = gsub("^vl", "vila", BAIRRO),
+         BAIRRO = gsub("^v\\.", "vila", BAIRRO),
+         BAIRRO = gsub("vila\\.", "vila", BAIRRO))
+
+#Essa base serve para avaliar os preços de São Paulo Capital
+preco <- postos %>% 
+  filter(NOTA.FISCAL == "Sim") %>% 
+  select(-DATA.RECUSA, -NOTA.FISCAL) %>% 
+  distinct(ENDEREÇO, .keep_all = TRUE)
+
+```
+
+Fazer a descritiva básica
+
+```{r DESCRIPTIVE}
+
+skim(preco)
+
+```
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/skim0.png "Descriptive1")
+
+
+Saber quantos postos há em São Paulo Capital, e claro: quantos donos (CNPJs). Descubra qual é a média de postos por dono
+
+```{r OWNERS}
+
+preco %>% 
+  group_by(Dono = RAZÃO.SOCIAL) %>% 
+  summarise(Postos= n_distinct(ENDEREÇO),
+            Bandeiras = n_distinct(BANDEIRA),
+            Bairro = n_distinct(BAIRRO)) %>% 
+  as.data.frame() %>% 
+  skim()
+
+```
+Praticamente 1 posto por CNPJ, apesar do registro de CNPJs que detém 7 postos. 
+
+Verificar quantos postos e bandeiras há por bairro
+
+```{r NEIGHBORHOODS}
+
+preco %>% 
+  group_by(Bairro = BAIRRO) %>% 
+  summarise(Postos= n_distinct(ENDEREÇO),
+            Bandeiras = n_distinct(BANDEIRA)) %>% 
+  as.data.frame() %>% 
+  skim()
+
+```
+Há 2.51 postos por bairro, e 1.64 Bandeiras por bairro. 
+
+Afirma-se que ninguém sonegou informações para a pesquisa - todos os postos responderam ela, mesmo em períodos diferentes. 
+
+Verificar qual é a bandeira de posto mais popular em São Paulo, e qual que tem a gasolina mais cara?
+
+```{r FLAG RANK}
+
+preco %>% 
+  group_by(Marca = BANDEIRA) %>% 
+  summarise(Postos = n()) %>% 
+  as.data.frame() %>% 
+  arrange(desc(Postos))
+
+preco %>% 
+  group_by(Marca = BANDEIRA) %>% 
+  summarise(Gasolina = mean(PREÇO.VENDA)) %>% 
+  as.data.frame() %>% 
+  arrange(desc(Gasolina))
+
+```
+As bandeiras "branca" e "Ipiranga" são, respectivamente, a primeira e segunda bandeiras mais populares em São Paulo Capital. 
+Enquanto as bandeiras com gasolina mais cara são "Ipiranga" e "Petrobrás." Salienta-se que a bandeira "branca" pratica os menores preços
+
+Analisar para descobrir qual é o bairro em São Paulo que tem a gasolina mais cara.
+
+```{r NEIGHBORHOOD RANK}
+
+preco %>% 
+  group_by(Bairro = BAIRRO) %>% 
+  summarise(Gasolina = mean(PREÇO.VENDA)) %>% 
+  as.data.frame() %>% 
+  arrange(desc(Gasolina))
+
+```
+Bairro | Preço (R$/l)
+------------ | -------------
+jardim cabore |	5.799000			
+higienopolis |	4.999000			
+parque colonial |	4.999000			
+chacara itaim |	4.990000			
+vila progredior |	4.990000			
+jardim america |	4.932333			
+jardim paulista |	4.899000			
+liberdade |	4.799000			
+indianopolis |	4.699000			
+jardim sao sebastiao |	4.699000	
+
+Conseguir endereços mais precisos para fazer pesquisa de coordenadas (latitude e longitude) no Google Maps por meio do "ggmap".
+
+```{r COORDINATES}
+
+library(ggmap)
+
+#Primeiro ative o API do Google Maps
+
+# register_google(key = "SUA_CHAVE_AQUI")
+register_google(key = "SUA_CHAVE_AQUI")
+
+#Verifique se a chave está ativa
+ggmap::has_google_key()
+
+postos2 <- postos %>% 
+  mutate(Lugar = str_to_lower(paste(ENDEREÇO, BAIRRO, sep = " - ")),
+         CidadeUF = str_to_lower(paste("São Paulo", "sp", sep = " - ")),
+         Lugar = paste(Lugar, CidadeUF, "brazil", sep = ", ")) %>% #Colocar endereço nesse formato: "praça joão pessoa, 3 - centro, itapecerica da serra - sp, 06850-035, brazil"
+  mutate_geocode(Lugar, 
+                 output = "latlona", 
+                 source = "google") #Pesquisar as coordenadas com base na variável "Lugar"
+
+write.csv(postos2, "SampaGasPreço.csv", 
+          row.names = FALSE) #Salvar a base com a info de coordenadas para evitar repetir a pesquisa novamente
+
+```
+
+Uma vez com essas coordenadas, usar esse arquivo para plotar um mapa em que mostre onde está mais caro o preço da gasolina
+
+```{r PLOT PRICE LOCATION}
+
+postos2 <- read.csv("SampaGasPreço.csv")
+
+postos2 <- postos2 %>% 
+  mutate_at(vars(RAZÃO.SOCIAL, ENDEREÇO, BAIRRO, BANDEIRA), list(~as.character(.)))
+
+preco2 <- postos2 %>% 
+  filter(NOTA.FISCAL == "Sim",
+         PREÇO.VENDA < 4.75)
+
+pal1 <- colorNumeric(palette = rev(RColorBrewer::brewer.pal(10,"RdYlBu")), 
+                     domain = preco2$PREÇO.VENDA)
+
+preco2 %>% 
+  leaflet() %>% 
+  addProviderTiles(providers$Stamen.Toner) %>% 
+  addCircleMarkers(lng = ~lon,
+                   lat = ~lat,
+                   color = ~pal1(PREÇO.VENDA),
+                   radius = 10,
+                   opacity = 1,
+                   popup = ~Lugar,
+                   label = ~PREÇO.VENDA) %>% 
+  addLegend("bottomright", 
+            pal = pal1, 
+            values = ~PREÇO.VENDA,
+            title = "Preço da Gasolina",
+            labFormat = labelFormat(prefix = "R$"),
+            opacity = 1)
+
+```
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/SampaGas2.png "PostosPrecos")
+
+Primeiro, conserte a informação de bairros: há duplicados e com acento & sem acento, e de quebra, há bairros com nome equivocado
+
+```{r EVIDENCE TABLE1}
+
+postos2 <- postos2 %>% 
+  mutate(BAIRRO = iconv(BAIRRO, 
+                        from="utf-8", to = "ASCII//TRANSLIT"),
+         BAIRRO = str_to_lower(BAIRRO), 
+         BAIRRO = gsub("raza", "rasa", BAIRRO),
+         BAIRRO = gsub("alvin", "alvim", BAIRRO),
+         BAIRRO = gsub("belezinho", "belenzinho", BAIRRO),
+         BAIRRO = gsub("do limao", "bairro limao", BAIRRO),
+         BAIRRO = gsub("bairro limoeiro", "limoeiro", BAIRRO),
+         BAIRRO = gsub("jardim angela \\(zona sul\\)", "jardim angela", BAIRRO),
+         BAIRRO = gsub("jardim da gloria", "jardim gloria", BAIRRO),
+         BAIRRO = gsub("jardim das rosas - pinheiros", "jardim das rosas", BAIRRO),
+         BAIRRO = gsub("jardim iv centenario", "jardim quarto centenario", BAIRRO),
+         BAIRRO = gsub("vila moinho velho/vila vera", "vila moinho velho", BAIRRO),
+         BAIRRO = gsub("alto dos pinheiros", "alto de pinheiros", BAIRRO),
+         BAIRRO = gsub("vila nov a conceicao", "vila nova conceicao", BAIRRO),
+         BAIRRO = gsub("vila merces", "vila das merces", BAIRRO),
+         BAIRRO = gsub("vila vera/sacoma", "vila vera", BAIRRO),
+         BAIRRO = gsub("vila firmino pinto", "vila firmiano pinto", BAIRRO),
+         BAIRRO = gsub("s miguel paulista", "sao miguel paulista", BAIRRO),
+         BAIRRO = gsub("sto amaro", "santo amaro", BAIRRO),
+         BAIRRO = gsub("parque paineiras", "parque das paineiras", BAIRRO),
+         BAIRRO = gsub("nossa sra do o", "nossa senhora do o", BAIRRO),
+         BAIRRO = gsub("j s cristovao", "jardim nove de julho", BAIRRO),
+         BAIRRO = gsub("hygienopolis", "higienopolis", BAIRRO),
+         BAIRRO = gsub("freguesia do o", "nossa senhora do o", BAIRRO),
+         BAIRRO = gsub("casa verde - santana", "casa verde", BAIRRO),
+         BAIRRO = gsub("cicy lapa 1", "bela alianca", BAIRRO),
+         BAIRRO = gsub("freguesia do o", "nossa senhora do o", BAIRRO),
+         BAIRRO = gsub("cid ae carvalho", "cidade a.e.carvalho", BAIRRO),
+         BAIRRO = gsub(c("^jd","^jd\\."), "jardim", BAIRRO),
+         BAIRRO = gsub("jardim\\.", "jardim", BAIRRO),
+         BAIRRO = gsub(c("pq", "pq\\."), "parque", BAIRRO),
+         BAIRRO = gsub("parque\\.", "parque", BAIRRO),
+         BAIRRO = gsub("prq", "parque", BAIRRO),
+         BAIRRO = gsub("^vl", "vila", BAIRRO),
+         BAIRRO = gsub("^v\\.", "vila", BAIRRO),
+         BAIRRO = gsub("vila\\.", "vila", BAIRRO))
+  
+  
+tabela <- postos2 %>% 
+  filter(NOTA.FISCAL == "Sim") %>% 
+  group_by(Bairro = BAIRRO) %>% 
+  summarise(Postos = n_distinct(ENDEREÇO),
+            PreçoMédia = mean(PREÇO.VENDA),
+            PreçoDesvio = sd(PREÇO.VENDA),
+            Bandeiras = n_distinct(BANDEIRA)
+  ) %>% 
+  as.data.frame() %>% 
+  mutate(Outlier = ifelse(PreçoMédia > 4.75, 1, 0),
+         Competition = ifelse(Bandeiras > 1, 1, 0),
+         PreçoDesvio = replace_na(PreçoDesvio, 0))
+
+skim(tabela)
+
+```
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/skim1.png "Descriptive2")
+
+
+Juntar a informação de preços com a zona que pertence os bairros
+
+```{r EVIDENCE TABLE2}
+
+bairros2 <- bairros %>% 
+  mutate_at(vars(-Zona), list(~as.character(.))) %>% 
+  mutate(Bairro = str_to_lower(Bairro),
+         Bairro = iconv(Bairro, 
+                        from="utf-8", to = "ASCII//TRANSLIT"),
+         Bairro = gsub("jardim progredior", "vila progredior", Bairro),
+         Divisão = ifelse(Divisão == "", NA, Divisão)) %>% 
+  distinct(Bairro, .keep_all = TRUE)
+
+bairros2 <- bairros2 %>% 
+  add_row(Bairro = c("bairro limao", "casa verde", "nossa senhora do o", "limoeiro", "guaianazes"), Distrito = c("CASA VERDE", "CASA VERDE", "FREGUESIA DO O", "SAO LUCAS", "GUAIANAZES"), Divisão = c(NA, NA, NA, "ZONA LESTE 1", "ZONA LESTE 1"), Zona = c("NORTE", "NORTE", "NORTE", "LESTE", "LESTE"))
+
+tabela <- tabela %>% 
+  left_join(bairros2, by = "Bairro") %>% 
+  select(-Divisão)
+
+```
+
+Verifique a influencia sobre o nível de preço
+
+```{r EVIDENCE MODEL1}
+
+reg1 <- lm(PreçoMédia ~ Outlier + Postos, data = tabela)
+
+summary(reg1)
+
+```
+
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/Regression0.png "Regression1")
+
+Está claro que os bairros, como unidades de cluster (grupo), não são o suficiente para testar a nossa hipótese, especialmente por conta de uma premissa que não é verdadeira: os motoristas não buscam e pesquisam combustível dentro de um bairro, e sim, dentro de uma área que envolve vários bairros. É necessário criar uma nova clusterização (agrupamento) para testar o modelo novamente. 
+
+Uma abordagem adequada para criar clusters: o algoritmo k-means. 
+
+Mas para criar os clusters precisamos de uma referência baseada nas informações de bairros e distritos da seguinte forma, por exemplo: o distrito do Grajaú tem vários bairros, incluindo o bairro Grajaú, então o posto desse distrito é que vai servir de referência para formar o cluster; se houver mais de 1 posto nesse bairro, é feito uma média com as coordenadas (encontrar o meio termo). 
+
+```{r CLUSTER REFERENCE}
+
+reference <- bairros %>% 
+  mutate_at(vars(-Zona), list(~as.character(.))) %>% 
+  mutate(Bairro = str_to_lower(Bairro),
+         Bairro = iconv(Bairro, 
+                        from="utf-8", to = "ASCII//TRANSLIT"),
+         Bairro = gsub("jardim progredior", "vila progredior", Bairro),
+         Divisão = ifelse(Divisão == "", NA, Divisão),
+         Núcleo = ifelse(str_to_lower(Bairro) == str_to_lower(Distrito), 1, 0)
+         ) %>% 
+  filter(Núcleo == 1) %>% 
+  select(Bairro, Núcleo)
+
+reference <- postos2 %>% 
+  distinct(ENDEREÇO, .keep_all = TRUE) %>% 
+  right_join(reference, by = c("BAIRRO" = "Bairro")) %>% 
+  group_by(BAIRRO) %>%
+  summarise(lon = mean(lon, na.rm = TRUE),
+            lat = mean(lat, na.rm = TRUE)) %>%
+  filter(!is.nan(lon))
+
+```
+
+Observa-se que há outras formas e construir clusters ao usar o "teste de silueta" - afirmar qual é o número ótimo de clusters, no entanto, o número que esta técnica fornece é 6 - o que é muito limitado para rodar uma regressão, e assim, responder a nossa pergunta. Usar a informação de distrito é uma forma de clusterizar, sem ser discricionário (usar um método conforme a conveniência). 
+
+Usar a informação de referência, que fornece 34 pontos para formar os cluster.
+
+```{r CREATING CLUSTERS}
+
+k <- reference %>% 
+  select(-BAIRRO)
+
+x <- postos2 %>% 
+  distinct(ENDEREÇO, .keep_all = TRUE) %>% 
+  select(lon, lat)
+
+clustering <- kmeans(x, k) 
+
+ggcluster <- clustering[["centers"]] %>% 
+  as.data.frame() %>% 
+  mutate(Tipo = "Cluster")
+
+cluster <- clustering[["cluster"]] %>% 
+  as.data.frame()
+
+clustering
+
+```
+Nota-se que a clusterização está razoável: agrupou mais de 97% dos postos listados. 
+
+Observe por meio do gráfico de dispersão como ficou a clusterização: se ela está coerente, e realmente agrupando vários postos. 
+
+```{r SEEING CLUSTERS}
+
+theme_set(theme_minimal())
+
+postos2 %>% 
+  select(lon, lat) %>% 
+  mutate(Tipo = "Posto") %>% 
+  bind_rows(ggcluster) %>% 
+  ggplot() +
+  geom_point(aes(x = lon, y = lat, colour = Tipo), 
+             size = 1.5) +
+  scale_color_manual(values = c("#ff0000","#e9ab00")) +
+  labs(x = "Longitude", 
+       y = "Latitude") +
+  theme(legend.position = "top")
+
+```
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/ClusterVisualization.png "SeeClusters")
+
+Adicionar as informações de cluster e montar grupos com número de postos e preço médio praticado no lugar
+
+```{r ADDING CLUSTER INFO}
+
+postos3 <- postos2 %>% 
+  distinct(ENDEREÇO, .keep_all = TRUE) %>% 
+  add_column(cluster = cluster$.)
+
+tabela3 <- postos3 %>% 
+  filter(NOTA.FISCAL == "Sim",
+         PREÇO.VENDA < 4.75) %>% 
+  group_by(Cluster = cluster) %>% 
+  summarise(Postos = n_distinct(ENDEREÇO),
+            Donos = n_distinct(RAZÃO.SOCIAL),
+            PreçoMédia = mean(PREÇO.VENDA),
+            PreçoDesvio = sd(PREÇO.VENDA),
+            Bandeiras = n_distinct(BANDEIRA)
+  ) %>% 
+  as.data.frame() %>% 
+  mutate(Cluster = as.character(Cluster), 
+         PreçoDesvio = replace_na(PreçoDesvio, 0),
+         Competition = ifelse(Bandeiras > 1, 1, 0)
+         )
+
+skim(tabela3)
+
+```
+
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/skim2.png "Descriptive3")
+
+```{r CLUSTER EVIDENCE}
+
+clustereg1 <- lm(PreçoMédia ~ Postos, 
+                 data = tabela3)
+
+summary(clustereg1)
+
+```
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/Regression.png "Regression2")
+
+```{r CLUSTER EVIDENCE-INTERPRETATION}
+
+clustereg1 <- lm(log(PreçoMédia) ~ log(Postos), 
+                 data = tabela3)
+
+summary(clustereg1)
+
+```
+
