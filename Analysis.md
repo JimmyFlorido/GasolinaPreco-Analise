@@ -1,11 +1,12 @@
 ---
-title: "GasInfoPreço4"
+title: "GasInfoPreço"
 author: "Lira"
 date: "03/01/2020"
 output: html_document
 ---
 
 ESSA ANÁLISE REFERE-SE AO MUNICÍPIO DE SÃO PAULO/SP, EM QUE ESTÃO VÁRIOS POSTOS INSTALADOS NA CIDADE. 
+
 OS DADOS ABORDAM OS PREÇOS DE GASOLINA NO PERÍODO DE LEVANTAMENTO DE NOVEMBRO DE 2019
 
 Mais informações podem ser achadas aqui http://www.anp.gov.br/preco/ 
@@ -17,7 +18,7 @@ Os pacotes necessários
 library(tidyverse)
 library(skimr)
 library(leaflet)
-# library(ggmap)
+library(ggmap)
 library(factoextra)
 
 #Uma função que pode ser útil
@@ -187,11 +188,8 @@ Conseguir endereços mais precisos para fazer pesquisa de coordenadas (latitude 
 
 ```{r COORDINATES}
 
-library(ggmap)
-
 #Primeiro ative o API do Google Maps
 
-# register_google(key = "SUA_CHAVE_AQUI")
 register_google(key = "SUA_CHAVE_AQUI")
 
 #Verifique se a chave está ativa
@@ -246,7 +244,11 @@ preco2 %>%
 ```
 ![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/SampaGas2.png "PostosPrecos")
 
-Primeiro, conserte a informação de bairros: há duplicados e com acento & sem acento, e de quebra, há bairros com nome equivocado
+O mapa mostra que podem ser traçados determinados padrões (na zona leste de São Paulo, há mais postos baratos), mas não responde a principal pergunta: lugares com maior competição entre os postos, tem menores preços de gasolina
+
+Para responder isso, será feita uma regressão que agrupará os postos em torno de bairros (Consolação, Bela Vista, Moema, etc), a fim de entender se um bairro com mais postos, tende a ter um combustível mais barato. 
+
+Primeiro, conserte a informação de bairros: há duplicados e com acento & sem acento, e de quebra, há bairros com nome equivocado. Com isso feito, monte uma base de dados para ser usada na regressão.
 
 ```{r EVIDENCE TABLE1}
 
@@ -308,8 +310,8 @@ skim(tabela)
 ```
 ![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/skim1.png "Descriptive2")
 
-
-Juntar a informação de preços com a zona que pertence os bairros
+Com uma melhor compreensão de como está estruturada essa base de dados, junte a informação de preços 
+com a zona que pertence os bairros
 
 ```{r EVIDENCE TABLE2}
 
@@ -331,7 +333,7 @@ tabela <- tabela %>%
 
 ```
 
-Verifique a influencia sobre o nível de preço
+Verifique a influência sobre o nível de preço
 
 ```{r EVIDENCE MODEL1}
 
@@ -343,11 +345,17 @@ summary(reg1)
 
 ![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/Regression0.png "Regression1")
 
-Está claro que os bairros, como unidades de cluster (grupo), não são o suficiente para testar a nossa hipótese, especialmente por conta de uma premissa que não é verdadeira: os motoristas não buscam e pesquisam combustível dentro de um bairro, e sim, dentro de uma área que envolve vários bairros. É necessário criar uma nova clusterização (agrupamento) para testar o modelo novamente. 
+Acrescenta-se que pode ser incluída a variável (dummy) das zonas da cidade na regressão - se tal bairro é da zona norte, sul, leste ou oeste, mas isso é acessório: não ajuda o modelo a responder o mais importante.
+
+# O ponto que essa regressão simples revela é que a quantidade de postos não é relevante para explicar o nível de preços entre a amostra de bairros. 
+
+No entanto, também está claro que os bairros, como unidades de cluster (agrupações), não são o suficiente para testar a nossa hipótese, especialmente por conta de uma premissa que não é verdadeira: os motoristas não buscam e pesquisam combustível dentro de um bairro, e sim, dentro de uma área que envolve vários bairros. É necessário criar uma nova clusterização (agrupamento) para testar o modelo novamente. 
 
 Uma abordagem adequada para criar clusters: o algoritmo k-means. 
 
-Mas para criar os clusters precisamos de uma referência baseada nas informações de bairros e distritos da seguinte forma, por exemplo: o distrito do Grajaú tem vários bairros, incluindo o bairro Grajaú, então o posto desse distrito é que vai servir de referência para formar o cluster; se houver mais de 1 posto nesse bairro, é feito uma média com as coordenadas (encontrar o meio termo). 
+Mas para criar os clusters precisamos de uma referência baseada nas informações de bairros e distritos, conforme este exemplo: o distrito do Grajaú tem vários bairros (Bororé, Parque Cocaia, Jardim Gaivota, etc), incluindo o bairro Grajaú, então o posto de combustível desse distrito é que servirá de referência para formar o cluster; se houver mais de 1 posto nesse bairro, é feito uma média com as coordenadas (encontrar o meio termo). 
+
+Na prática, são montados grupos baseados em distritos e suas coordenadas médias. 
 
 ```{r CLUSTER REFERENCE}
 
@@ -373,9 +381,13 @@ reference <- postos2 %>%
 
 ```
 
-Observa-se que há outras formas e construir clusters ao usar o "teste de silueta" - afirmar qual é o número ótimo de clusters, no entanto, o número que esta técnica fornece é 6 - o que é muito limitado para rodar uma regressão, e assim, responder a nossa pergunta. Usar a informação de distrito é uma forma de clusterizar, sem ser discricionário (usar um método conforme a conveniência). 
+Observa-se que há outras formas de construir clusters sem viés ao aliar o k-means com o "teste de silhueta" - afirmar qual é o número ótimo de clusters dentro do algoritmo. 
 
-Usar a informação de referência, que fornece 34 pontos para formar os cluster.
+No entanto, o número que esta técnica fornece é 6 (resposta providenciada pelo pacote "factoextra"), o que impossibilita rodar uma regressão com 6 observações, e assim, responder a nossa pergunta. 
+
+Usar a informação de distrito é uma forma de clusterizar, sem ser discricionário (usar um método conforme a conveniência, oq ue pode induzir a viés). 
+
+Ao usar a informação de referência, é fornecido 34 pontos para formar os clusters. 
 
 ```{r CREATING CLUSTERS}
 
@@ -400,7 +412,7 @@ clustering
 ```
 Nota-se que a clusterização está razoável: agrupou mais de 97% dos postos listados. 
 
-Observe por meio do gráfico de dispersão como ficou a clusterização: se ela está coerente, e realmente agrupando vários postos. 
+Observe, por meio do gráfico de dispersão, como ficou a clusterização: ela está coerente, e realmente distribuída entre vários postos. Dentro de cada cluster desses, há número suficiente de postos de gasolina para os consumidores pesquisarem os preços e trazerem uma premissa mais realista para a regressão. 
 
 ```{r SEEING CLUSTERS}
 
@@ -421,7 +433,7 @@ postos2 %>%
 ```
 ![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/ClusterVisualization.png "SeeClusters")
 
-Adicionar as informações de cluster e montar grupos com número de postos e preço médio praticado no lugar
+Adicionar as informações de cluster e montar grupos com número de postos e preço médio praticado no lugar. 
 
 ```{r ADDING CLUSTER INFO}
 
@@ -451,6 +463,8 @@ skim(tabela3)
 
 ![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/skim2.png "Descriptive3")
 
+Rodar o modelo, mais uma vez
+
 ```{r CLUSTER EVIDENCE}
 
 clustereg1 <- lm(PreçoMédia ~ Postos, 
@@ -461,6 +475,10 @@ summary(clustereg1)
 ```
 ![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/Regression.png "Regression2")
 
+# Os resutados da regressão, com a nova agrupação (baseada nos distritos), demonstram que quanto maior a quantidade de postos de combustíveis, menor é o preço médio da gasolina praticada na área. No entanto, é preciso enfatizar que o efeito disso é baixo (a regressão explica somente 14% do nível de preços entre as diferentes áreas). 
+
+É importante buscar novas variáveis para explicar isso, mas é válido afirmar que dados de diferentes períodos podem ajudar a trazer mais luz à questão.
+
 ```{r CLUSTER EVIDENCE-INTERPRETATION}
 
 clustereg1 <- lm(log(PreçoMédia) ~ log(Postos), 
@@ -469,4 +487,4 @@ clustereg1 <- lm(log(PreçoMédia) ~ log(Postos),
 summary(clustereg1)
 
 ```
-
+Essa regressão, posta em escala logarítmica, melhora a interpretabilidade do modelo ao afirmar que o aumento de 10% no número de postos de combustível por distrito, reduz em 0.113% o preço médio da gasolina na área. Isto é, se o número de postos de um distrito passar de 14 para 15, haverá a redução de R$ 0.003282 no preço da gasolina praticada no distrito. 
