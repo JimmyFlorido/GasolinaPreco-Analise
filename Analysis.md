@@ -5,13 +5,9 @@ date: "03/01/2020"
 output: html_document
 ---
 
-ESSA ANÁLISE REFERE-SE AO MUNICÍPIO DE SÃO PAULO/SP, EM QUE ESTÃO VÁRIOS POSTOS INSTALADOS NA CIDADE. 
+ESSA ANÁLISE REFERE-SE AO MUNICÍPIO DE SÃO PAULO/SP, EM QUE ESTÃO VÁRIOS POSTOS INSTALADOS NA CIDADE. OS DADOS ABORDAM OS PREÇOS DE GASOLINA NO PERÍODO DE LEVANTAMENTO DE NOVEMBRO DE 2019. Mais informações podem ser achadas aqui http://www.anp.gov.br/preco/ 
 
-OS DADOS ABORDAM OS PREÇOS DE GASOLINA NO PERÍODO DE LEVANTAMENTO DE NOVEMBRO DE 2019
-
-Mais informações podem ser achadas aqui http://www.anp.gov.br/preco/ 
-
-Os pacotes necessários
+Os pacotes necessários para o exercício
 
 ```{r PACKAGE}
 
@@ -20,19 +16,20 @@ library(skimr)
 library(leaflet)
 library(ggmap)
 library(factoextra)
+library(lmtest)
 
 #Uma função que pode ser útil
 '%!in%' <- function(x,y)!('%in%'(x,y))
 
 ```
 
-Os dados para a análise
+Carregue os dados necessários para a análise
 
 ```{r DATASET}
 
-dados <- read.csv("LevantamentoPreçoSampa.csv")
+dados <- read.csv("LevantamentoPreçoSampa.csv") #dados dos postos de combustíveis da cidade de São Paulo
 
-bairros <- read.csv("SampaBairros.csv")
+bairros <- read.csv("SampaBairros.csv") #Dados com os bairros e distritos de São Paulo, categorizados entre as zonas da cidade.
 
 ```
 
@@ -44,7 +41,7 @@ skim(dados)
 
 ```
 
-Ajustar os dados - conserte principalmente as informações de bairro
+Ajustar os dados - conserte principalmente as informações de bairro: há duplicados com acento & sem acento, e de quebra, há bairros com nome equivocado. 
 
 ```{r DATA FIX, include=FALSE}
 
@@ -59,13 +56,16 @@ postos <- dados %>%
          BAIRRO = gsub("raza", "rasa", BAIRRO),
          BAIRRO = gsub("alvin", "alvim", BAIRRO),
          BAIRRO = gsub("belezinho", "belenzinho", BAIRRO),
-         BAIRRO = gsub("do limao", "bairro limao", BAIRRO),
+         BAIRRO = gsub("do limao", "limao", BAIRRO),
+         BAIRRO = gsub("bairro limao", "limao", BAIRRO),
          BAIRRO = gsub("bairro limoeiro", "limoeiro", BAIRRO),
          BAIRRO = gsub("jardim angela \\(zona sul\\)", "jardim angela", BAIRRO),
          BAIRRO = gsub("jardim da gloria", "jardim gloria", BAIRRO),
          BAIRRO = gsub("jardim das rosas - pinheiros", "jardim das rosas", BAIRRO),
          BAIRRO = gsub("jardim iv centenario", "jardim quarto centenario", BAIRRO),
          BAIRRO = gsub("vila moinho velho/vila vera", "vila moinho velho", BAIRRO),
+         BAIRRO = gsub("vila manchester", "vila nova manchester", BAIRRO),
+         BAIRRO = gsub("guaianazes", "guaianases", BAIRRO),
          BAIRRO = gsub("alto dos pinheiros", "alto de pinheiros", BAIRRO),
          BAIRRO = gsub("vila nov a conceicao", "vila nova conceicao", BAIRRO),
          BAIRRO = gsub("vila merces", "vila das merces", BAIRRO),
@@ -77,6 +77,8 @@ postos <- dados %>%
          BAIRRO = gsub("nossa sra do o", "nossa senhora do o", BAIRRO),
          BAIRRO = gsub("j s cristovao", "jardim nove de julho", BAIRRO),
          BAIRRO = gsub("hygienopolis", "higienopolis", BAIRRO),
+         BAIRRO = gsub("nova parelheiros", "parelheiros", BAIRRO),
+         BAIRRO = gsub("colonia paulista", "parada colonia paulista", BAIRRO),
          BAIRRO = gsub("freguesia do o", "nossa senhora do o", BAIRRO),
          BAIRRO = gsub("casa verde - santana", "casa verde", BAIRRO),
          BAIRRO = gsub("cicy lapa 1", "bela alianca", BAIRRO),
@@ -244,54 +246,42 @@ preco2 %>%
 ```
 ![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/SampaGas2.png "PostosPrecos")
 
-O mapa mostra que podem ser traçados determinados padrões (na zona leste de São Paulo, há mais postos baratos), mas não responde a principal pergunta: lugares com maior competição entre os postos, tem menores preços de gasolina
+O mapa mostra que podem ser traçados determinados padrões (na zona leste de São Paulo, há mais postos baratos), mas não responde a principal pergunta: **lugares com maior competição entre os postos, têm menores preços de gasolina**
 
 Para responder isso, será feita uma regressão que agrupará os postos em torno de bairros (Consolação, Bela Vista, Moema, etc), a fim de entender se um bairro com mais postos, tende a ter um combustível mais barato. 
 
-Primeiro, conserte a informação de bairros: há duplicados e com acento & sem acento, e de quebra, há bairros com nome equivocado. Com isso feito, monte uma base de dados para ser usada na regressão.
+Junte a informação de preços com a zona ou distrito pertencente aos bairros. 
 
 ```{r EVIDENCE TABLE1}
 
-postos2 <- postos2 %>% 
-  mutate(BAIRRO = iconv(BAIRRO, 
+bairros2 <- bairros %>% 
+  add_row(
+    Bairro = c("limao", "casa verde", "nossa senhora do o", "limoeiro", "guaianases", "jaragua", "sao miguel paulista", "itaquera", "itaim paulista", "pirituba", "pompeia", "sao miguel", "vila curuca", "ermelino matarazzo", "parque do estado", "jardim tremembe", "vila nova curuca", "vila curuca velha", "cidade nitro operario", "vila nancy", "vila americana", "jardim nove de julho", "piqueri", "moinho velho", "itaberaba"), 
+    Distrito = c("CASA VERDE", "CASA VERDE", "FREGUESIA DO O", "SAO LUCAS", "GUAIANASES", "JARAGUA", "SAO MIGUEL", "ITAQUERA", "ITAIM PAULISTA", "PIRITUBA", "LAPA", "SAO MIGUEL", "VILA CURUCA", "ERMELINO MATARAZZO", "IPIRANGA", "TREMEMBE", "VILA CURUCA", "JARDIM HELENA", "SAO MIGUEL", "GUAIANASES", "SAO MIGUEL", "ITAQUERA", "FREGUESIA DO O", "PIRITUBA", "PIRITUBA"), 
+    Divisão = c(NA, NA, NA, "ZONA LESTE 1", "ZONA LESTE 1", NA, "ZONA LESTE 1", "ZONA LESTE 1", "ZONA LESTE 1", NA, NA,"ZONA LESTE 1", "ZONA LESTE 1", "ZONA LESTE 1", "ZONA SUL 1", NA, "ZONA LESTE 1", NA, "ZONA LESTE 1", "ZONA LESTE 1", "ZONA LESTE 1", "ZONA LESTE 1", NA, NA, NA), 
+    Zona = c("NORTE", "NORTE", "NORTE", "LESTE", "LESTE", "NORTE", "LESTE", "LESTE", "LESTE", "NORTE", "OESTE", "LESTE", "LESTE", "LESTE", "SUL", "NORTE", "LESTE", "NORTE", "LESTE", "LESTE", "LESTE", "LESTE", "NORTE", "NORTE", "NORTE")
+  ) %>% 
+  arrange(Bairro, Distrito)
+
+bairros2 <- bairros2 %>% 
+  mutate_at(vars(-Zona), list(~as.character(.))) %>% 
+  mutate(Bairro = str_to_lower(Bairro),
+         Bairro = iconv(Bairro, 
                         from="utf-8", to = "ASCII//TRANSLIT"),
-         BAIRRO = str_to_lower(BAIRRO), 
-         BAIRRO = gsub("raza", "rasa", BAIRRO),
-         BAIRRO = gsub("alvin", "alvim", BAIRRO),
-         BAIRRO = gsub("belezinho", "belenzinho", BAIRRO),
-         BAIRRO = gsub("do limao", "bairro limao", BAIRRO),
-         BAIRRO = gsub("bairro limoeiro", "limoeiro", BAIRRO),
-         BAIRRO = gsub("jardim angela \\(zona sul\\)", "jardim angela", BAIRRO),
-         BAIRRO = gsub("jardim da gloria", "jardim gloria", BAIRRO),
-         BAIRRO = gsub("jardim das rosas - pinheiros", "jardim das rosas", BAIRRO),
-         BAIRRO = gsub("jardim iv centenario", "jardim quarto centenario", BAIRRO),
-         BAIRRO = gsub("vila moinho velho/vila vera", "vila moinho velho", BAIRRO),
-         BAIRRO = gsub("alto dos pinheiros", "alto de pinheiros", BAIRRO),
-         BAIRRO = gsub("vila nov a conceicao", "vila nova conceicao", BAIRRO),
-         BAIRRO = gsub("vila merces", "vila das merces", BAIRRO),
-         BAIRRO = gsub("vila vera/sacoma", "vila vera", BAIRRO),
-         BAIRRO = gsub("vila firmino pinto", "vila firmiano pinto", BAIRRO),
-         BAIRRO = gsub("s miguel paulista", "sao miguel paulista", BAIRRO),
-         BAIRRO = gsub("sto amaro", "santo amaro", BAIRRO),
-         BAIRRO = gsub("parque paineiras", "parque das paineiras", BAIRRO),
-         BAIRRO = gsub("nossa sra do o", "nossa senhora do o", BAIRRO),
-         BAIRRO = gsub("j s cristovao", "jardim nove de julho", BAIRRO),
-         BAIRRO = gsub("hygienopolis", "higienopolis", BAIRRO),
-         BAIRRO = gsub("freguesia do o", "nossa senhora do o", BAIRRO),
-         BAIRRO = gsub("casa verde - santana", "casa verde", BAIRRO),
-         BAIRRO = gsub("cicy lapa 1", "bela alianca", BAIRRO),
-         BAIRRO = gsub("freguesia do o", "nossa senhora do o", BAIRRO),
-         BAIRRO = gsub("cid ae carvalho", "cidade a.e.carvalho", BAIRRO),
-         BAIRRO = gsub(c("^jd","^jd\\."), "jardim", BAIRRO),
-         BAIRRO = gsub("jardim\\.", "jardim", BAIRRO),
-         BAIRRO = gsub(c("pq", "pq\\."), "parque", BAIRRO),
-         BAIRRO = gsub("parque\\.", "parque", BAIRRO),
-         BAIRRO = gsub("prq", "parque", BAIRRO),
-         BAIRRO = gsub("^vl", "vila", BAIRRO),
-         BAIRRO = gsub("^v\\.", "vila", BAIRRO),
-         BAIRRO = gsub("vila\\.", "vila", BAIRRO))
-  
-  
+         Bairro = gsub("jardim progredior", "vila progredior", Bairro),
+         Distrito = str_to_lower(Distrito),
+         Distrito = iconv(Distrito, 
+                          from="utf-8", to = "ASCII//TRANSLIT"),
+         Distrito = gsub("itaim-bibi", "itaim bibi", Distrito),
+         Divisão = ifelse(Divisão == "", NA, Divisão)) %>% 
+  distinct(Bairro, .keep_all = TRUE)
+
+```
+
+Faça a tabela a ser usada nas modelagens, e além de um panorama dela através do "skim". 
+
+```{r EVIDENCE TABLE2}
+
 tabela <- postos2 %>% 
   filter(NOTA.FISCAL == "Sim") %>% 
   group_by(Bairro = BAIRRO) %>% 
@@ -303,35 +293,15 @@ tabela <- postos2 %>%
   as.data.frame() %>% 
   mutate(Outlier = ifelse(PreçoMédia > 4.75, 1, 0),
          Competition = ifelse(Bandeiras > 1, 1, 0),
-         PreçoDesvio = replace_na(PreçoDesvio, 0))
-
+         PreçoDesvio = replace_na(PreçoDesvio, 0)) %>% 
+  left_join(bairros2, by = "Bairro") %>% 
+  select(-Divisão)
+  
 skim(tabela)
 
 ```
+
 ![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/skim1.png "Descriptive2")
-
-Com uma melhor compreensão de como está estruturada essa base de dados, junte a informação de preços 
-com a zona que pertence os bairros
-
-```{r EVIDENCE TABLE2}
-
-bairros2 <- bairros %>% 
-  mutate_at(vars(-Zona), list(~as.character(.))) %>% 
-  mutate(Bairro = str_to_lower(Bairro),
-         Bairro = iconv(Bairro, 
-                        from="utf-8", to = "ASCII//TRANSLIT"),
-         Bairro = gsub("jardim progredior", "vila progredior", Bairro),
-         Divisão = ifelse(Divisão == "", NA, Divisão)) %>% 
-  distinct(Bairro, .keep_all = TRUE)
-
-bairros2 <- bairros2 %>% 
-  add_row(Bairro = c("bairro limao", "casa verde", "nossa senhora do o", "limoeiro", "guaianazes"), Distrito = c("CASA VERDE", "CASA VERDE", "FREGUESIA DO O", "SAO LUCAS", "GUAIANAZES"), Divisão = c(NA, NA, NA, "ZONA LESTE 1", "ZONA LESTE 1"), Zona = c("NORTE", "NORTE", "NORTE", "LESTE", "LESTE"))
-
-tabela <- tabela %>% 
-  left_join(bairros2, by = "Bairro") %>% 
-  select(-Divisão)
-
-```
 
 Verifique a influência sobre o nível de preço
 
@@ -475,7 +445,9 @@ summary(clustereg1)
 ```
 ![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/Regression.png "Regression2")
 
-# Os resutados da regressão, com a nova agrupação (baseada nos distritos), demonstram que quanto maior a quantidade de postos de combustíveis, menor é o preço médio da gasolina praticada na área. No entanto, é preciso enfatizar que o efeito disso é baixo (a regressão explica somente 14% do nível de preços entre as diferentes áreas). 
+---
+Os resutados da regressão, com a nova agrupação (baseada nos distritos), demonstram que quanto maior a quantidade de postos de combustíveis, menor é o preço médio da gasolina praticada na área. No entanto, é preciso enfatizar que o efeito disso é baixo (a regressão explica somente 14% do nível de preços entre as diferentes áreas). 
+---
 
 É importante buscar novas variáveis para explicar isso, mas é válido afirmar que dados de diferentes períodos podem ajudar a trazer mais luz à questão.
 
