@@ -26,7 +26,7 @@ Carregue os dados necessários para a análise
 
 ```{r DATASET}
 
-dados <- read.csv("LevantamentoPreçoSampa.csv") #dados dos postos de combustíveis da cidade de São Paulo
+dados <- read.csv("LevantamentoPreçoSampa.csv") #Dados dos postos de combustíveis da cidade de São Paulo
 
 bairros <- read.csv("SampaBairros.csv") #Dados com os bairros e distritos de São Paulo, categorizados entre as zonas da cidade.
 
@@ -34,9 +34,11 @@ pop <- read.csv2("Populaçãototal20200117.csv",
                        header = FALSE,
                        encoding = "latin1",
                        dec = ".",
-                       stringsAsFactors = FALSE)
+                       stringsAsFactors = FALSE) #Dados de população por distrito
 
 ```
+É importante mencionar que a base de dados de bairros de São Paulo Capital foi extraída de pesquisas na web de forma manual, no entanto, os dados de população por distrito foram retirados daqui: http://observasampa.prefeitura.sp.gov.br/populacao 
+
 
 Visão preliminar dos dados - enxergar o que precisa ser ajustado
 
@@ -101,8 +103,8 @@ postos <- dados %>%
 
 #Essa base serve para avaliar os preços de São Paulo Capital
 preco <- postos %>% 
-  filter(NOTA.FISCAL == "Sim") %>% 
-  distinct(ENDEREÇO, .keep_all = TRUE) %>% 
+  filter(NOTA.FISCAL == "Sim") %>% #Deixar somente os postos que declararam os preços na nota. 
+  distinct(ENDEREÇO, .keep_all = TRUE) %>% #Tirar a repetição de estabelecimentos na base
   select(-DATA.RECUSA, -NOTA.FISCAL)
 
 ```
@@ -256,9 +258,9 @@ preco2 %>%
             opacity = 1)
 
 ```
-Além disso, mostre num mapa como estão distribuídos por marca os postos. 
+Além disso, mostre num mapa como estão distribuídos os postos por marca. 
 
-```{r WHITE LOCATION}
+```{r PLOT WHITE LOCATION}
 
 preco2 <- postos2 %>% 
   filter(NOTA.FISCAL == "Sim",
@@ -290,12 +292,13 @@ preco2 %>%
 Ao comparar os dois mapas, consegue-se traçar certos padrões: na zona leste de São Paulo, há mais postos baratos, e também há mais postos de bandeira "Branca". É uma correlação que vale a pena ser testada. 
 
 Apesar dessas aferições, os mapas não respondem a principal pergunta: 
-# lugares com maior competição entre os postos, têm menores preços de gasolina?
+# Lugares com maior competição entre os postos, têm menores preços de gasolina?
 
 Para responder isso, será feita uma regressão que agrupará os postos em torno de bairros (Consolação, Bela Vista, Moema, etc), a fim de entender se um bairro com mais postos, tende a ter um combustível mais barato. 
 
 ```{r NEIGHBORHOOD DATASET FIX}
 
+#Inserir na base  de bairros, alguns bairros e distritos que ficaram de fora
 bairros2 <- bairros %>% 
   add_row(
     Bairro = c("limao", "casa verde", "nossa senhora do o", "limoeiro", "guaianases", "jaragua", "sao miguel paulista", "itaquera", "itaim paulista", "pirituba", "pompeia", "sao miguel", "vila curuca", "ermelino matarazzo", "parque do estado", "jardim tremembe", "vila nova curuca", "vila curuca velha", "cidade nitro operario", "vila nancy", "vila americana", "jardim nove de julho", "piqueri", "moinho velho", "itaberaba"), 
@@ -324,6 +327,7 @@ Junte a informação de preços com a zona ou distrito pertencente aos bairros, 
 
 ```{r EVIDENCE TABLE}
 
+#mudar o bairro de "centro" para "tremembe". Um pequeno ajuste a ser feito
 postos2[219, 3] <- "tremembe"
 
 tabela <- postos2 %>% 
@@ -331,11 +335,11 @@ tabela <- postos2 %>%
   mutate(Branca = ifelse(BANDEIRA == "BRANCA", 
                          1, 0)) %>% 
   group_by(Bairro = BAIRRO) %>% 
-  summarise(Postos = n_distinct(ENDEREÇO),
-            Donos = n_distinct(RAZÃO.SOCIAL),
-            PreçoMédia = mean(PREÇO.VENDA),
-            Bandeiras = n_distinct(BANDEIRA),
-            Branca = sum(Branca)
+  summarise(Postos = n_distinct(ENDEREÇO), #Quantidade de postos
+            Donos = n_distinct(RAZÃO.SOCIAL), #Quantidade de CNPJ's
+            PreçoMédia = mean(PREÇO.VENDA), #Preço médio da gasolina
+            Bandeiras = n_distinct(BANDEIRA), #Quantidade diferente de bandeiras
+            Branca = sum(Branca) #Quantidade de postos com bandeira "branca"
   ) %>% 
   as.data.frame() %>% 
   mutate(Outlier = ifelse(PreçoMédia > 4.75, 1, 0)) %>% 
@@ -362,7 +366,7 @@ summary(reg1)
 Acrescenta-se que pode ser incluída a variável (dummy) das zonas da cidade na regressão - se tal bairro é da zona norte, sul, leste ou oeste, mas isso é acessório: não ajuda o modelo a responder o mais importante.
 
 ---
-O ponto que essa regressão simples revela é que a quantidade de postos não é relevante para explicar o nível de preços entre a amostra de bairros. No entanto, a proporção de postos de marca branca entre os bairros é uma variável relevante para afetar o nível de preço médio de gasolina nos bairros. 
+O ponto que essa regressão múltipla revela é que a quantidade de postos não é relevante para explicar o nível de preços entre a amostra de bairros. No entanto, a proporção de postos de marca branca entre os bairros é uma variável relevante para afetar o nível de preço médio de gasolina nos bairros. 
 ---
 
 No entanto, também está claro que os bairros, como unidades de cluster (agrupações), não são o suficiente para testar a nossa hipótese, especialmente por conta de uma **premissa que não é verdadeira:** os motoristas não buscam e pesquisam combustível dentro de um bairro, e sim, dentro de uma área que envolve vários bairros. É necessário criar uma nova clusterização (agrupamento) para testar o modelo novamente. 
@@ -484,7 +488,7 @@ tabela2 <- postos3 %>%
             Branca = sum(Branca)
   ) %>% 
   as.data.frame() %>% 
-  add_column(População = reference$População) %>% 
+  add_column(População = reference$População) %>% #Inserir a projeção de residentes por distrito
   mutate(Cluster = as.character(Cluster)
          )
 
@@ -518,7 +522,7 @@ tabela2 %>%
 ![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/dist1.png "prices")
 ![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/dist2.png "stations")
 
-Rodar o modelo, de novo
+Rodar o modelo, de novo.
 
 ```{r CLUSTER EVIDENCE}
 
@@ -552,10 +556,15 @@ dwtest(clustereg1)
 ```
 ![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/tests.png "regression_tests")
 
-A baixa significância da estatística no teste RESET mostra que não há problema de não-linearidade do modelo (má especificação).
-Não há presença de heterocedasticidade (a hipótese nula afirma a ausência de heterocedasticidade).
-E não há problema de autocorrelação - o DW está próximo de 2. Ou seja, é uma regressão sem problemas de consistência ou viés. 
+A baixa significância da estatística no teste RESET mostra que não há problema de não-linearidade do modelo (má especificação).Não tem presença de heterocedasticidade (a hipótese nula afirma a ausência de heterocedasticidade). E não há problema de autocorrelação - o DW está próximo de 2. 
+Ou seja, é uma regressão sem problemas de consistência ou viés. 
 
 ---
 Os resultados da regressão, com a nova agrupação (baseada nos distritos), demonstram que quanto maior a quantidade de postos de combustíveis, menor é o preço médio da gasolina praticada na área. No entanto, é preciso enfatizar que o efeito disso é baixo, ao contrário da proproção de postos de bandeira branca por região, que tem um efeito não desprezivel para os preços de gasolina praticados em Sâo Paulo. 
 ---
+
+Adverte-se que a inserção de população por distrito na regressão não foi significativa em nenhuma circuntância, por isso, não consta no modelo. 
+
+Para entender melhor os efeitos descritos no modelo, ilustra-se o seguinte: se há o aumento de **20%** no número de postos, e de quebra, eleva-se também em 20% a proporção de postos de marca branca numa área específica, estima-se que haverá a redução do preço em **R$ 0.009** por parte do aumento da quantidade de postos, enquanto o crescimento da participação da marca branca no mercado, reduz o preço em **R$ 0.019**. 
+
+Nota-se que o efeito produzido pela entrada de postos de combustível de marca branca tende a reduzir os preços mais do que a entrada per se de um posto qualquer. E faz sentido: postos de gasolina que não estão ligados a grande marcas (Ipiranga, Petrobrás, Esso, etc) somente adquirem competividade por meio dos preço, já que não possuem grandes orçamentos para marketing  para se fazerem notar, por exemplo.   
