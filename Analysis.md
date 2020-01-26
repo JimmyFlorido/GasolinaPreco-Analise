@@ -5,7 +5,7 @@ date: "25/01/2020"
 output: html_document
 ---
 
-**ESSA ANÁLISE REFERE-SE AO MUNICÍPIO DE SÃO PAULO/SP, EM QUE ESTÃO VÁRIOS POSTOS INSTALADOS NA CIDADE. OS DADOS ABORDAM OS PREÇOS DE GASOLINA NO PERÍODO DE LEVANTAMENTO DE NOVEMBRO DE 2019. Mais informações podem ser achadas aqui http://www.anp.gov.br/preco/ **
+ESSA ANÁLISE REFERE-SE AO MUNICÍPIO DE SÃO PAULO/SP, EM QUE ESTÃO VÁRIOS POSTOS INSTALADOS NA CIDADE. OS DADOS ABORDAM OS PREÇOS DE GASOLINA NO PERÍODO DE LEVANTAMENTO DE **NOVEMBRO DE 2019**. Mais informações podem ser achadas aqui http://www.anp.gov.br/preco/
 
 Os pacotes necessários para o exercício
 
@@ -45,6 +45,7 @@ Visão preliminar dos dados - enxergar o que precisa ser ajustado
 skim(dados)
 
 ```
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/skim.png "descriptive")
 
 Ajustar os dados - conserte principalmente as informações de bairro: há duplicados com acento & sem acento, e de quebra, há bairros com nome equivocado. 
 
@@ -164,6 +165,9 @@ preco %>%
   arrange(desc(Gasolina))
 
 ```
+
+As bandeiras "branca" e "Ipiranga" são, respectivamente, a primeira e segunda bandeiras mais populares em São Paulo Capital. 
+
 Marca | Preço (R$/l)
 ------------ | -------------
 Ipiranga |	4.284852			
@@ -173,7 +177,6 @@ Zema |	4.139000
 Alesat |	4.040357			
 Branca |	3.974141
 
-As bandeiras "branca" e "Ipiranga" são, respectivamente, a primeira e segunda bandeiras mais populares em São Paulo Capital. 
 Enquanto as bandeiras com gasolina mais cara são "Ipiranga" e "Petrobrás." Salienta-se que a bandeira "branca" pratica os menores preços
 
 Analisar para descobrir qual é o bairro em São Paulo que tem a gasolina mais cara.
@@ -206,7 +209,7 @@ Conseguir endereços mais precisos para fazer pesquisa de coordenadas (latitude 
 
 #Primeiro ative o API do Google Maps
 
-register_google(key = "AIzaSyDraLrdm7nUtAOXC7xqA2aL-vqi4QzsY0o")
+register_google(key = "SUA_CHAVE_AQUI")
 
 #Verifique se a chave está ativa
 ggmap::has_google_key()
@@ -286,7 +289,8 @@ preco2 %>%
 
 Ao comparar os dois mapas, consegue-se traçar certos padrões: na zona leste de São Paulo, há mais postos baratos, e também há mais postos de bandeira "Branca". É uma correlação que vale a pena ser testada. 
 
-Apesar dessas aferições, os mapas não respondem a principal pergunta: **lugares com maior competição entre os postos, têm menores preços de gasolina**
+Apesar dessas aferições, os mapas não respondem a principal pergunta: 
+# lugares com maior competição entre os postos, têm menores preços de gasolina?
 
 Para responder isso, será feita uma regressão que agrupará os postos em torno de bairros (Consolação, Bela Vista, Moema, etc), a fim de entender se um bairro com mais postos, tende a ter um combustível mais barato. 
 
@@ -357,9 +361,11 @@ summary(reg1)
 
 Acrescenta-se que pode ser incluída a variável (dummy) das zonas da cidade na regressão - se tal bairro é da zona norte, sul, leste ou oeste, mas isso é acessório: não ajuda o modelo a responder o mais importante.
 
-# O ponto que essa regressão simples revela é que a quantidade de postos não é relevante para explicar o nível de preços entre a amostra de bairros. No entanto, a quantidade de postos de marca branca
+---
+O ponto que essa regressão simples revela é que a quantidade de postos não é relevante para explicar o nível de preços entre a amostra de bairros. No entanto, a proporção de postos de marca branca entre os bairros é uma variável relevante para afetar o nível de preço médio de gasolina nos bairros. 
+---
 
-No entanto, também está claro que os bairros, como unidades de cluster (agrupações), não são o suficiente para testar a nossa hipótese, especialmente por conta de uma premissa que não é verdadeira: os motoristas não buscam e pesquisam combustível dentro de um bairro, e sim, dentro de uma área que envolve vários bairros. É necessário criar uma nova clusterização (agrupamento) para testar o modelo novamente. 
+No entanto, também está claro que os bairros, como unidades de cluster (agrupações), não são o suficiente para testar a nossa hipótese, especialmente por conta de uma **premissa que não é verdadeira:** os motoristas não buscam e pesquisam combustível dentro de um bairro, e sim, dentro de uma área que envolve vários bairros. É necessário criar uma nova clusterização (agrupamento) para testar o modelo novamente. 
 
 Uma abordagem adequada para criar clusters: o algoritmo k-means. 
 
@@ -548,8 +554,8 @@ dwtest(clustereg1)
 
 A baixa significância da estatística no teste RESET mostra que não há problema de não-linearidade do modelo (má especificação).
 Não há presença de heterocedasticidade (a hipótese nula afirma a ausência de heterocedasticidade).
-E não há problema de autocorrelação - o DW está próximo de 2.
+E não há problema de autocorrelação - o DW está próximo de 2. Ou seja, é uma regressão sem problemas de consistência ou viés. 
 
 ---
-Os resutados da regressão, com a nova agrupação (baseada nos distritos), demonstram que quanto maior a quantidade de postos de combustíveis, menor é o preço médio da gasolina praticada na área. No entanto, é preciso enfatizar que o efeito disso é baixo (a regressão explica somente 14% do nível de preços entre as diferentes áreas). 
+Os resultados da regressão, com a nova agrupação (baseada nos distritos), demonstram que quanto maior a quantidade de postos de combustíveis, menor é o preço médio da gasolina praticada na área. No entanto, é preciso enfatizar que o efeito disso é baixo, ao contrário da proproção de postos de bandeira branca por região, que tem um efeito não desprezivel para os preços de gasolina praticados em Sâo Paulo. 
 ---
