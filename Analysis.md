@@ -1,11 +1,11 @@
 ---
-title: "GasInfoPreço"
+title: "GasPrice"
 author: "Lira"
-date: "03/01/2020"
+date: "25/01/2020"
 output: html_document
 ---
 
-ESSA ANÁLISE REFERE-SE AO MUNICÍPIO DE SÃO PAULO/SP, EM QUE ESTÃO VÁRIOS POSTOS INSTALADOS NA CIDADE. OS DADOS ABORDAM OS PREÇOS DE GASOLINA NO PERÍODO DE LEVANTAMENTO DE NOVEMBRO DE 2019. Mais informações podem ser achadas aqui http://www.anp.gov.br/preco/ 
+**ESSA ANÁLISE REFERE-SE AO MUNICÍPIO DE SÃO PAULO/SP, EM QUE ESTÃO VÁRIOS POSTOS INSTALADOS NA CIDADE. OS DADOS ABORDAM OS PREÇOS DE GASOLINA NO PERÍODO DE LEVANTAMENTO DE NOVEMBRO DE 2019. Mais informações podem ser achadas aqui http://www.anp.gov.br/preco/ **
 
 Os pacotes necessários para o exercício
 
@@ -16,7 +16,6 @@ library(skimr)
 library(leaflet)
 library(ggmap)
 library(factoextra)
-library(lmtest)
 
 #Uma função que pode ser útil
 '%!in%' <- function(x,y)!('%in%'(x,y))
@@ -30,6 +29,12 @@ Carregue os dados necessários para a análise
 dados <- read.csv("LevantamentoPreçoSampa.csv") #dados dos postos de combustíveis da cidade de São Paulo
 
 bairros <- read.csv("SampaBairros.csv") #Dados com os bairros e distritos de São Paulo, categorizados entre as zonas da cidade.
+
+pop <- read.csv2("Populaçãototal20200117.csv",
+                       header = FALSE,
+                       encoding = "latin1",
+                       dec = ".",
+                       stringsAsFactors = FALSE)
 
 ```
 
@@ -96,8 +101,8 @@ postos <- dados %>%
 #Essa base serve para avaliar os preços de São Paulo Capital
 preco <- postos %>% 
   filter(NOTA.FISCAL == "Sim") %>% 
-  select(-DATA.RECUSA, -NOTA.FISCAL) %>% 
-  distinct(ENDEREÇO, .keep_all = TRUE)
+  distinct(ENDEREÇO, .keep_all = TRUE) %>% 
+  select(-DATA.RECUSA, -NOTA.FISCAL)
 
 ```
 
@@ -108,7 +113,7 @@ Fazer a descritiva básica
 skim(preco)
 
 ```
-![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/skim0.png "Descriptive1")
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/skim1.png "descriptive1")
 
 
 Saber quantos postos há em São Paulo Capital, e claro: quantos donos (CNPJs). Descubra qual é a média de postos por dono
@@ -159,6 +164,15 @@ preco %>%
   arrange(desc(Gasolina))
 
 ```
+Marca | Preço (R$/l)
+------------ | -------------
+Ipiranga |	4.284852			
+Petrobrás |	4.258189			
+Raízen |	4.201177			
+Zema |	4.139000			
+Alesat |	4.040357			
+Branca |	3.974141
+
 As bandeiras "branca" e "Ipiranga" são, respectivamente, a primeira e segunda bandeiras mais populares em São Paulo Capital. 
 Enquanto as bandeiras com gasolina mais cara são "Ipiranga" e "Petrobrás." Salienta-se que a bandeira "branca" pratica os menores preços
 
@@ -188,11 +202,11 @@ jardim sao sebastiao |	4.699000
 
 Conseguir endereços mais precisos para fazer pesquisa de coordenadas (latitude e longitude) no Google Maps por meio do "ggmap".
 
-```{r COORDINATES}
+```{r COORDINATES, eval=FALSE, include=FALSE}
 
 #Primeiro ative o API do Google Maps
 
-register_google(key = "SUA_CHAVE_AQUI")
+register_google(key = "AIzaSyDraLrdm7nUtAOXC7xqA2aL-vqi4QzsY0o")
 
 #Verifique se a chave está ativa
 ggmap::has_google_key()
@@ -210,14 +224,9 @@ write.csv(postos2, "SampaGasPreço.csv",
 
 ```
 
-Uma vez com essas coordenadas, usar esse arquivo para plotar um mapa em que mostre onde está mais caro o preço da gasolina
+Uma vez com essas coordenadas, usar esse arquivo para plotar um mapa em que mostre onde está mais caro o preço da gasolina. 
 
 ```{r PLOT PRICE LOCATION}
-
-postos2 <- read.csv("SampaGasPreço.csv")
-
-postos2 <- postos2 %>% 
-  mutate_at(vars(RAZÃO.SOCIAL, ENDEREÇO, BAIRRO, BANDEIRA), list(~as.character(.)))
 
 preco2 <- postos2 %>% 
   filter(NOTA.FISCAL == "Sim",
@@ -244,15 +253,44 @@ preco2 %>%
             opacity = 1)
 
 ```
-![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/SampaGas2.png "PostosPrecos")
+Além disso, mostre num mapa como estão distribuídos por marca os postos. 
 
-O mapa mostra que podem ser traçados determinados padrões (na zona leste de São Paulo, há mais postos baratos), mas não responde a principal pergunta: **lugares com maior competição entre os postos, têm menores preços de gasolina**
+```{r WHITE LOCATION}
+
+preco2 <- postos2 %>% 
+  filter(NOTA.FISCAL == "Sim",
+         PREÇO.VENDA < 4.75) %>% 
+  mutate(BANDEIRA = as.factor(BANDEIRA))
+
+pal2 <- colorFactor("Set1", preco2$BANDEIRA)
+
+preco2 %>% 
+  leaflet() %>% 
+  addProviderTiles(providers$Stamen.Toner) %>% 
+  addCircleMarkers(lng = ~lon,
+                   lat = ~lat,
+                   color = ~pal2(preco2$BANDEIRA),
+                   radius = 7.5,
+                   opacity = 1,
+                   popup = ~Lugar,
+                   label = ~PREÇO.VENDA) %>% 
+  addLegend("bottomright", 
+            pal = pal2, 
+            values = ~BANDEIRA,
+            title = "Bandeira de Posto",
+            opacity = 1)
+
+```
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/SampaGas.png "Mapa1")
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/SampaGas2.png "Mapa2")
+
+Ao comparar os dois mapas, consegue-se traçar certos padrões: na zona leste de São Paulo, há mais postos baratos, e também há mais postos de bandeira "Branca". É uma correlação que vale a pena ser testada. 
+
+Apesar dessas aferições, os mapas não respondem a principal pergunta: **lugares com maior competição entre os postos, têm menores preços de gasolina**
 
 Para responder isso, será feita uma regressão que agrupará os postos em torno de bairros (Consolação, Bela Vista, Moema, etc), a fim de entender se um bairro com mais postos, tende a ter um combustível mais barato. 
 
-Junte a informação de preços com a zona ou distrito pertencente aos bairros. 
-
-```{r EVIDENCE TABLE1}
+```{r NEIGHBORHOOD DATASET FIX}
 
 bairros2 <- bairros %>% 
   add_row(
@@ -278,76 +316,92 @@ bairros2 <- bairros2 %>%
 
 ```
 
-Faça a tabela a ser usada nas modelagens, e além de um panorama dela através do "skim". 
+Junte a informação de preços com a zona ou distrito pertencente aos bairros, e faça a tabela a ser usada nas modelagens, além de um panorama dela através do "skim". 
 
-```{r EVIDENCE TABLE2}
+```{r EVIDENCE TABLE}
+
+postos2[219, 3] <- "tremembe"
 
 tabela <- postos2 %>% 
   filter(NOTA.FISCAL == "Sim") %>% 
+  mutate(Branca = ifelse(BANDEIRA == "BRANCA", 
+                         1, 0)) %>% 
   group_by(Bairro = BAIRRO) %>% 
   summarise(Postos = n_distinct(ENDEREÇO),
+            Donos = n_distinct(RAZÃO.SOCIAL),
             PreçoMédia = mean(PREÇO.VENDA),
-            PreçoDesvio = sd(PREÇO.VENDA),
-            Bandeiras = n_distinct(BANDEIRA)
+            Bandeiras = n_distinct(BANDEIRA),
+            Branca = sum(Branca)
   ) %>% 
   as.data.frame() %>% 
-  mutate(Outlier = ifelse(PreçoMédia > 4.75, 1, 0),
-         Competition = ifelse(Bandeiras > 1, 1, 0),
-         PreçoDesvio = replace_na(PreçoDesvio, 0)) %>% 
+  mutate(Outlier = ifelse(PreçoMédia > 4.75, 1, 0)) %>% 
   left_join(bairros2, by = "Bairro") %>% 
   select(-Divisão)
   
 skim(tabela)
 
 ```
-
-![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/skim1.png "Descriptive2")
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/skim2.png "descriptive2")
 
 Verifique a influência sobre o nível de preço
 
 ```{r EVIDENCE MODEL1}
 
-reg1 <- lm(PreçoMédia ~ Outlier + Postos, data = tabela)
+reg1 <- lm(PreçoMédia ~ Outlier + Postos + I(Branca/Postos), 
+           data = tabela)
 
 summary(reg1)
 
 ```
-
-![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/Regression0.png "Regression1")
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/reg1.png "regression1")
 
 Acrescenta-se que pode ser incluída a variável (dummy) das zonas da cidade na regressão - se tal bairro é da zona norte, sul, leste ou oeste, mas isso é acessório: não ajuda o modelo a responder o mais importante.
 
-# O ponto que essa regressão simples revela é que a quantidade de postos não é relevante para explicar o nível de preços entre a amostra de bairros. 
+# O ponto que essa regressão simples revela é que a quantidade de postos não é relevante para explicar o nível de preços entre a amostra de bairros. No entanto, a quantidade de postos de marca branca
 
 No entanto, também está claro que os bairros, como unidades de cluster (agrupações), não são o suficiente para testar a nossa hipótese, especialmente por conta de uma premissa que não é verdadeira: os motoristas não buscam e pesquisam combustível dentro de um bairro, e sim, dentro de uma área que envolve vários bairros. É necessário criar uma nova clusterização (agrupamento) para testar o modelo novamente. 
 
 Uma abordagem adequada para criar clusters: o algoritmo k-means. 
 
-Mas para criar os clusters precisamos de uma referência baseada nas informações de bairros e distritos, conforme este exemplo: o distrito do Grajaú tem vários bairros (Bororé, Parque Cocaia, Jardim Gaivota, etc), incluindo o bairro Grajaú, então o posto de combustível desse distrito é que servirá de referência para formar o cluster; se houver mais de 1 posto nesse bairro, é feito uma média com as coordenadas (encontrar o meio termo). 
-
-Na prática, são montados grupos baseados em distritos e suas coordenadas médias. 
+Mas para criar os clusters precisamos de uma referência baseada nas informações de bairros e distritos, conforme este exemplo: o distrito do Grajaú tem vários bairros (Bororé, Parque Cocaia, Jardim Gaivota, etc), incluindo o bairro Grajaú, então o posto de combustível desse distrito é que servirá de referência para formar o cluster; se houver mais de 1 posto nesse bairro, é feito uma média com as coordenadas (encontrar o meio termo). **Na prática, são montados grupos baseados em distritos e suas coordenadas médias.**
 
 ```{r CLUSTER REFERENCE}
 
-reference <- bairros %>% 
-  mutate_at(vars(-Zona), list(~as.character(.))) %>% 
-  mutate(Bairro = str_to_lower(Bairro),
-         Bairro = iconv(Bairro, 
-                        from="utf-8", to = "ASCII//TRANSLIT"),
-         Bairro = gsub("jardim progredior", "vila progredior", Bairro),
-         Divisão = ifelse(Divisão == "", NA, Divisão),
+reference <- bairros2 %>% 
+  mutate(
          Núcleo = ifelse(str_to_lower(Bairro) == str_to_lower(Distrito), 1, 0)
          ) %>% 
   filter(Núcleo == 1) %>% 
-  select(Bairro, Núcleo)
+  select(Bairro, Núcleo) %>% 
+  left_join(pop2, by = c("Bairro" = "DISTRITO"))
 
 reference <- postos2 %>% 
   distinct(ENDEREÇO, .keep_all = TRUE) %>% 
   right_join(reference, by = c("BAIRRO" = "Bairro")) %>% 
-  group_by(BAIRRO) %>%
+  group_by(BAIRRO, População = POPULAÇÃO) %>%
   summarise(lon = mean(lon, na.rm = TRUE),
             lat = mean(lat, na.rm = TRUE)) %>%
+  as.data.frame() %>% 
   filter(!is.nan(lon))
+
+```
+
+Ajustar a base de dados de população por distrito, caso seja necessário usar essa informação. 
+
+```{r POPULATION DATASET FIX}
+
+pop2 <- pop[-1,]
+
+pop2 <- pop2 %>% 
+  select(V2, V3, V4) %>% 
+  rename("DISTRITO" = V2, "ANO" = V3, "POPULAÇÃO" = V4) %>% 
+  mutate(DISTRITO = gsub("\\(Distrito\\)", "", DISTRITO),
+         DISTRITO = str_to_lower(DISTRITO),
+         DISTRITO = iconv(DISTRITO, 
+                        from="utf-8", to = "ASCII//TRANSLIT"),
+         ANO = as.numeric(ANO),
+         POPULAÇÃO = gsub("\\.", "", POPULAÇÃO),
+         POPULAÇÃO = as.numeric(POPULAÇÃO))
 
 ```
 
@@ -357,12 +411,12 @@ No entanto, o número que esta técnica fornece é 6 (resposta providenciada pel
 
 Usar a informação de distrito é uma forma de clusterizar, sem ser discricionário (usar um método conforme a conveniência, oq ue pode induzir a viés). 
 
-Ao usar a informação de referência, é fornecido 34 pontos para formar os clusters. 
+Ao usar a informação de referência, é fornecido 54 pontos para formar os clusters. 
 
 ```{r CREATING CLUSTERS}
 
 k <- reference %>% 
-  select(-BAIRRO)
+  select(-BAIRRO, -População)
 
 x <- postos2 %>% 
   distinct(ENDEREÇO, .keep_all = TRUE) %>% 
@@ -401,7 +455,7 @@ postos2 %>%
   theme(legend.position = "top")
 
 ```
-![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/ClusterVisualization.png "SeeClusters")
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/ClusterVisualization.png "54clusters")
 
 Adicionar as informações de cluster e montar grupos com número de postos e preço médio praticado no lugar. 
 
@@ -411,52 +465,91 @@ postos3 <- postos2 %>%
   distinct(ENDEREÇO, .keep_all = TRUE) %>% 
   add_column(cluster = cluster$.)
 
-tabela3 <- postos3 %>% 
+tabela2 <- postos3 %>% 
   filter(NOTA.FISCAL == "Sim",
-         PREÇO.VENDA < 4.75) %>% 
+         PREÇO.VENDA < 4.75) %>%
+  mutate(Branca = ifelse(BANDEIRA == "BRANCA", 
+                         1, 0)) %>% 
   group_by(Cluster = cluster) %>% 
   summarise(Postos = n_distinct(ENDEREÇO),
             Donos = n_distinct(RAZÃO.SOCIAL),
             PreçoMédia = mean(PREÇO.VENDA),
-            PreçoDesvio = sd(PREÇO.VENDA),
-            Bandeiras = n_distinct(BANDEIRA)
+            Bandeiras = n_distinct(BANDEIRA),
+            Branca = sum(Branca)
   ) %>% 
   as.data.frame() %>% 
-  mutate(Cluster = as.character(Cluster), 
-         PreçoDesvio = replace_na(PreçoDesvio, 0),
-         Competition = ifelse(Bandeiras > 1, 1, 0)
+  add_column(População = reference$População) %>% 
+  mutate(Cluster = as.character(Cluster)
          )
 
-skim(tabela3)
+skim(tabela2)
 
 ```
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/skim3.png "descriptive3")
 
-![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/skim2.png "Descriptive3")
+Visualize, mais uma vez, as distribuições de preço médio de gasolina e número de postos
 
-Rodar o modelo, mais uma vez
+```{r PRICE DISTIRBUTION2}
+
+theme_set(theme_minimal())
+
+tabela2 %>%
+  ggplot() +
+  aes(x = PreçoMédia) %>%
+  geom_histogram(
+                 fill = "lawngreen") +
+  labs(x = "Preço (R$)",
+       y = "Frequência")
+
+tabela2 %>% 
+  ggplot() +
+  aes(x = Postos) %>% 
+  geom_freqpoly(colour = "green", size = 1.5) +
+  labs(x = "Quantidade de Postos",
+       y = "Frequência")
+
+```
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/dist1.png "prices")
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/dist2.png "stations")
+
+Rodar o modelo, de novo
 
 ```{r CLUSTER EVIDENCE}
 
-clustereg1 <- lm(PreçoMédia ~ Postos, 
-                 data = tabela3)
+clustereg1 <- lm(PreçoMédia ~ Postos + I(Branca/Postos), 
+                 data = tabela2)
 
 summary(clustereg1)
 
 ```
-![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/Regression.png "Regression2")
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/reg2.png "regression2")
+
+```{r TESTING REGRESSION}
+
+#Package with tests for different problems that occur to OLS regressions
+library(lmtest)
+
+#Verify the underspecification modeling - Ramsey's RESET Test
+resettest(clustereg1, 
+          power = 2, 
+          type = "regressor")
+
+#Testing heterocesdasticity - White Test (using Breusch-Pagan formula)
+bptest(clustereg1, 
+       varformula = ~ Postos + I(Branca/Postos) + I(Postos^2) + I((Branca/Postos)^2) + I(Postos*(Branca/Postos)), 
+       data = tabela2, 
+       studentize = FALSE)
+
+#Testting autocorrelation - Durbin-Watson index
+dwtest(clustereg1)
+
+```
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/tests.png "regression_tests")
+
+A baixa significância da estatística no teste RESET mostra que não há problema de não-linearidade do modelo (má especificação).
+Não há presença de heterocedasticidade (a hipótese nula afirma a ausência de heterocedasticidade).
+E não há problema de autocorrelação - o DW está próximo de 2.
 
 ---
 Os resutados da regressão, com a nova agrupação (baseada nos distritos), demonstram que quanto maior a quantidade de postos de combustíveis, menor é o preço médio da gasolina praticada na área. No entanto, é preciso enfatizar que o efeito disso é baixo (a regressão explica somente 14% do nível de preços entre as diferentes áreas). 
 ---
-
-É importante buscar novas variáveis para explicar isso, mas é válido afirmar que dados de diferentes períodos podem ajudar a trazer mais luz à questão.
-
-```{r CLUSTER EVIDENCE-INTERPRETATION}
-
-clustereg1 <- lm(log(PreçoMédia) ~ log(Postos), 
-                 data = tabela3)
-
-summary(clustereg1)
-
-```
-Essa regressão, posta em escala logarítmica, melhora a interpretabilidade do modelo ao afirmar que o aumento de 10% no número de postos de combustível por distrito, reduz em 0.113% o preço médio da gasolina na área. Isto é, se o número de postos de um distrito passar de 14 para 15, haverá a redução de R$ 0.003282 no preço da gasolina praticada no distrito. 
