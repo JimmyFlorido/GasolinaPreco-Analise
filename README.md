@@ -11,7 +11,7 @@ Os dados abrangem o período de novembro de 2019, e podem ser achados aqui http:
 Entendeu-se que há regiões que realmente praticam menores preços de gasolina, e que possuem mais postos que as demais, 
 além de haver grandes "outliers" - postos que cobram mais de R$ 5 pelo litro da gasolina! O mapa abaixo mostra um pouco disso: 
 
-![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/SampaGas.png "PostosPrecos")
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/Images/SampaGas.png "PostosPrecos")
 
 Mas o mapa não traz clareza sobre o efeito da competição, e por isso, foi feita uma regressão OLS (Ordinay Least Square) para 
 entender se quanto maior a quantidade de postos numa região, menor é o preço da gasolina pŕaticada na região. 
