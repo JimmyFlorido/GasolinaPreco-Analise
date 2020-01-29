@@ -47,7 +47,7 @@ Visão preliminar dos dados - enxergar o que precisa ser ajustado
 skim(dados)
 
 ```
-![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/skim.png "descriptive")
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/Images/skim.png "descriptive")
 
 Ajustar os dados - conserte principalmente as informações de bairro: há duplicados com acento & sem acento, e de quebra, há bairros com nome equivocado. 
 
@@ -116,7 +116,7 @@ Fazer a descritiva básica
 skim(preco)
 
 ```
-![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/skim1.png "descriptive1")
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/Images/skim1.png "descriptive1")
 
 
 Saber quantos postos há em São Paulo Capital, e claro: quantos donos (CNPJs). Descubra qual é a média de postos por dono
@@ -286,8 +286,8 @@ preco2 %>%
             opacity = 1)
 
 ```
-![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/SampaGas.png "Mapa1")
-![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/SampaGas2.png "Mapa2")
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/Images/SampaGas.png "Mapa1")
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/Images/SampaGas2.png "Mapa2")
 
 Ao comparar os dois mapas, consegue-se traçar certos padrões: na zona leste de São Paulo, há mais postos baratos, e também há mais postos de bandeira "Branca". É uma correlação que vale a pena ser testada. 
 
@@ -349,7 +349,7 @@ tabela <- postos2 %>%
 skim(tabela)
 
 ```
-![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/skim2.png "descriptive2")
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/Images/skim2.png "descriptive2")
 
 Verifique a influência sobre o nível de preço
 
@@ -361,7 +361,7 @@ reg1 <- lm(PreçoMédia ~ Outlier + Postos + I(Branca/Postos),
 summary(reg1)
 
 ```
-![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/reg1.png "regression1")
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/Images/reg1.png "regression1")
 
 Acrescenta-se que pode ser incluída a variável (dummy) das zonas da cidade na regressão - se tal bairro é da zona norte, sul, leste ou oeste, mas isso é acessório: não ajuda o modelo a responder o mais importante.
 
@@ -465,7 +465,7 @@ postos2 %>%
   theme(legend.position = "top")
 
 ```
-![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/ClusterVisualization.png "54clusters")
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/Images/ClusterVisualization.png "54clusters")
 
 Adicionar as informações de cluster e montar grupos com número de postos e preço médio praticado no lugar. 
 
@@ -495,7 +495,7 @@ tabela2 <- postos3 %>%
 skim(tabela2)
 
 ```
-![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/skim3.png "descriptive3")
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/Images/skim3.png "descriptive3")
 
 Visualize, mais uma vez, as distribuições de preço médio de gasolina e número de postos
 
@@ -519,8 +519,8 @@ tabela2 %>%
        y = "Frequência")
 
 ```
-![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/dist1.png "prices")
-![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/dist2.png "stations")
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/Images/dist1.png "prices")
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/Images/dist2.png "stations")
 
 Rodar o modelo, de novo.
 
@@ -532,7 +532,7 @@ clustereg1 <- lm(PreçoMédia ~ Postos + I(Branca/Postos),
 summary(clustereg1)
 
 ```
-![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/reg2.png "regression2")
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/Images/reg2.png "regression2")
 
 ```{r TESTING REGRESSION}
 
@@ -554,7 +554,7 @@ bptest(clustereg1,
 dwtest(clustereg1)
 
 ```
-![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/Patch-2/Images/tests.png "regression_tests")
+![alt text](https://github.com/JimmyFlorido/GasolinaPreco-Analise/blob/master/Images/tests.png "regression_tests")
 
 A baixa significância da estatística no teste RESET mostra que não há problema de não-linearidade do modelo (má especificação).Não tem presença de heterocedasticidade (a hipótese nula afirma a ausência de heterocedasticidade). E não há problema de autocorrelação - o DW está próximo de 2. 
 Ou seja, é uma regressão sem problemas de consistência ou viés. 
