@@ -23,7 +23,7 @@ por combustível pode envolver vários bairros.
 Por isso, construi-se uma outra proxy de "região" usando o algoritmo k-means, ou seja, usou-se um algoritmo de clusterização 
 para criar grupos de postos de combustíveis que não obedecem a lógica de bairro, mas sim, de distrito. 
 
-O resultado mostra que há uma relação invera entre o número de postos de combustível com o preço médio praticado numa região.
+O resultado mostra que há uma relação inversa entre o número de postos de combustível com o preço médio praticado numa região.
 Mas tal relação não é forte o suficiente: o aumento de 10% no número de postos, reduz o preço da gasolina da região em 0.017%. No entanto, foi descoberto que a maior presença de postos de marca branca é mais importante para reduzir o nível de preços de um lugar.  
 
 A riqueza desse exercício não limita-se a rodar uma regressão múltipla, mas de usar um algoritmo de clusterização para criar uma base de dados adaptada para o propósito desse exercício. Acredita-se que esse exercício não é conclusivo, pois é necessário adicionar uma variável para captar demanda: houve tentativas com projeção de população de distritos (não foram bem-sucedidos), mas pensa-se em usar do dados de tráfego de veículos (Waze?) para captar a demanda nos postos de combustível. 
